@@ -11,7 +11,7 @@ on the supplied Keski-Suomen hyvinvointialue directory examples.
 python generate_data.py
 ```
 
-The command creates `data/keski_suomen_hyvinvointialue_users.csv` with 1,000
+The command creates `data/keski_suomen_hyvinvointialue_users.csv` with 15,000
 synthetic rows. The output is already at the readable, post-processing stage:
 the hierarchy is represented by `Organization`, `BusinessArea`,
 `ResponsibilityArea`, `ServiceArea`, `ServiceUnit`, `WorkLocation`, and
@@ -27,7 +27,7 @@ are intentionally not exported.
 The generator uses only Python's standard library. It accepts:
 
 ```bash
-python generate_data.py --rows 1000 --seed 20260917 --output data/example.csv
+python generate_data.py --rows 15000 --seed 20260917 --output data/example.csv
 ```
 
 All names, phone numbers, and email addresses are synthetic. Email addresses
