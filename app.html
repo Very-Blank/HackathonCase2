@@ -89,21 +89,21 @@
     <div class="grid">
       <aside class="card filters">
         <h2>Rajaa vastaanottajat</h2>
-        <p class="hint">Valinnat yhdistetään kahdesta synteettisestä tietolähteestä.</p>
-        <label for="org">Organisaatio</label>
-        <select id="org"><option value="">Kaikki organisaatiot</option></select>
-        <label for="role">Ammattiryhmä / rooli</label>
-        <select id="role"><option value="">Kaikki roolit</option></select>
+        <p class="hint">Valinnat tehdään suoraan CSV-tiedoston henkilöstöriveistä.</p>
+        <label for="org">Osasto / palvelualue</label>
+        <select id="org"><option value="">Kaikki osastot</option></select>
+        <label for="role">Henkilöstötyyppi / rooli</label>
+        <select id="role"><option value="">Kaikki henkilöstötyypit</option></select>
         <label for="title">Tehtävänimike sisältää</label>
         <input id="title" type="search" placeholder="esim. koordinaattori">
         <label for="search">Hae henkilön tietoja</label>
         <input id="search" type="search" placeholder="nimi, yksikkö tai tunniste">
         <label class="check"><input id="validOnly" type="checkbox"> Näytä vain vientikelpoiset</label>
         <div class="source-note">
-          <strong>Tietolähteet</strong><br>
-          Henkilöstötiedot: <span id="peopleCount"></span> synteettistä riviä<br>
-          Organisaatiorakenne: <span id="orgCount"></span> yksikköä<br>
-          Yhdistäminen: <strong>orgId</strong>
+          <strong>Tietolähde</strong><br>
+          CSV-rivejä: <span id="peopleCount">ladataan…</span><br>
+          Suodatinryhmiä: <span id="orgCount">—</span><br>
+          Lähde: <strong>example_data.csv</strong>
         </div>
       </aside>
       <section class="content">
@@ -116,7 +116,7 @@
         <div class="card preview">
           <div class="preview-head">
             <div><h2>Listan esikatselu</h2><span class="hint">Tarkista laatu ennen kopiointia tai vientiä.</span></div>
-            <div class="actions"><button id="copy" class="secondary">Kopioi osoitteet</button><button id="export" class="primary">Vie CSV</button></div>
+            <div class="actions"><button id="copy" class="secondary" disabled>Kopioi osoitteet</button><button id="outlook" class="primary" disabled>Vie Outlookiin</button><button id="export" class="primary" disabled>Vie CSV</button></div>
           </div>
           <div id="criteria" class="criteria"></div>
           <div id="notice"></div>
@@ -132,94 +132,288 @@
   </main>
   <div id="toast" class="toast" role="status"></div>
   <script>
-    // Both sources are deliberately synthetic; no real personnel data is used.
-    const organisations = [
-      { id: 'org-01', name: 'Hyvinvointialueen johto', unit: 'Hallinto ja kehittäminen' },
-      { id: 'org-02', name: 'Sosiaali- ja perhepalvelut', unit: 'Perhepalvelut' },
-      { id: 'org-03', name: 'Terveyspalvelut', unit: 'Avoterveydenhuolto' },
-      { id: 'org-04', name: 'Pelastuspalvelut', unit: 'Pelastuslaitos' }
-    ];
-    const people = [
-      { id: 'P-1001', name: 'Aino Malli', orgId: 'org-01', role: 'Hallinto', title: 'kehittämispäällikkö', email: 'aino.malli@example.test' },
-      { id: 'P-1002', name: 'Eero Esimerkki', orgId: 'org-01', role: 'Viestintä', title: 'viestintäkoordinaattori', email: 'eero.esimerkki@example.test' },
-      { id: 'P-1003', name: 'Sini Demo', orgId: 'org-02', role: 'Sosiaalipalvelut', title: 'sosiaalityöntekijä', email: 'sini.demo@example.test' },
-      { id: 'P-1004', name: 'Olli Testi', orgId: 'org-02', role: 'Sosiaalipalvelut', title: 'palveluohjaaja', email: 'olli.testi@example.test' },
-      { id: 'P-1005', name: 'Meri Malli', orgId: 'org-03', role: 'Terveydenhuolto', title: 'sairaanhoitaja', email: 'meri.malli@example.test' },
-      { id: 'P-1006', name: 'Lumi Esimerkki', orgId: 'org-03', role: 'Terveydenhuolto', title: 'terveydenhoitaja', email: 'meri.malli@example.test' },
-      { id: 'P-1007', name: 'Vesa Demo', orgId: 'org-03', role: 'Johtaminen', title: 'osastonhoitaja', email: '' },
-      { id: 'P-1008', name: 'Kajo Testi', orgId: 'org-04', role: 'Pelastus', title: 'palomestari', email: 'kajo.demo@' },
-      { id: 'P-1009', name: 'Iiris Malli', orgId: 'org-04', role: 'Pelastus', title: 'palomies', email: 'iiris.malli@example.test' }
-    ];
+    const DATA_FILE = 'example_data.csv';
+    const MAX_RENDERED_ROWS = 250;
     const $ = (id) => document.getElementById(id);
-    const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-    const orgById = new Map(organisations.map((org) => [org.id, org]));
-    const duplicateEmails = new Set(people.map((p) => p.email).filter((email, i, all) => email && all.indexOf(email) !== i));
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    let organisations = [];
+    let people = [];
+    let orgById = new Map();
+    let duplicateEmails = new Set();
+    let dataLoaded = false;
+
+    function clean(value) {
+      return String(value ?? '').trim();
+    }
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
     }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let index = 0; index < text.length; index += 1) {
+        const character = text[index];
+        if (inQuotes) {
+          if (character === '"') {
+            if (text[index + 1] === '"') {
+              field += '"';
+              index += 1;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            field += character;
+          }
+        } else if (character === '"') {
+          inQuotes = true;
+        } else if (character === ',') {
+          row.push(field);
+          field = '';
+        } else if (character === '\n') {
+          row.push(field.replace(/\r$/, ''));
+          rows.push(row);
+          row = [];
+          field = '';
+        } else {
+          field += character;
+        }
+      }
+
+      if (field || row.length) {
+        row.push(field.replace(/\r$/, ''));
+        rows.push(row);
+      }
+
+      if (!rows.length) return [];
+      const headers = rows.shift().map((header) => clean(header).replace(/^\uFEFF/, ''));
+      return rows
+        .filter((values) => values.some((value) => clean(value)))
+        .map((values) => Object.fromEntries(headers.map((header, index) => [header, clean(values[index])])))
+        .filter((record) => record.EmployeeId || record.DisplayName || record.EmailAddress);
+    }
+
+    async function readCsvFile() {
+      if (window.desktopApi?.loadCsv) return window.desktopApi.loadCsv();
+      const response = await fetch(DATA_FILE);
+      if (!response.ok) throw new Error('CSV-tiedostoa ei voitu ladata (' + response.status + ').');
+      return response.text();
+    }
+
+    function initialiseData(records) {
+      const rawPeople = records.map((record, index) => ({
+        id: clean(record.EmployeeId) || 'CSV-' + String(index + 1).padStart(6, '0'),
+        name: clean(record.DisplayName) || 'Nimetön henkilö',
+        company: clean(record.Company) || 'Organisaatio puuttuu',
+        department: clean(record.Department) || 'Osasto puuttuu',
+        serviceUnit: clean(record.ServiceUnit),
+        role: clean(record.EmployeeType) || 'Henkilöstötyyppi puuttuu',
+        title: clean(record.Title) || 'Tehtävänimike puuttuu',
+        email: clean(record.EmailAddress).toLowerCase(),
+        accountStatus: clean(record.AccountStatus),
+        city: clean(record.City),
+        businessArea: clean(record.BusinessArea),
+        responsibilityArea: clean(record.ResponsibilityArea),
+        serviceArea: clean(record.ServiceArea),
+        hierarchyLevel: clean(record.HierarchyLevel)
+      }));
+
+      const departments = [...new Set(rawPeople.map((person) => person.department))]
+        .sort((first, second) => first.localeCompare(second, 'fi'));
+      organisations = departments.map((department, index) => ({
+        id: 'department-' + String(index + 1),
+        name: department
+      }));
+      const departmentToId = new Map(organisations.map((organisation) => [organisation.name, organisation.id]));
+      people = rawPeople.map((person) => ({ ...person, orgId: departmentToId.get(person.department) }));
+      orgById = new Map(organisations.map((organisation) => [organisation.id, organisation]));
+
+      const emailCounts = new Map();
+      people.forEach((person) => {
+        if (person.email) emailCounts.set(person.email, (emailCounts.get(person.email) || 0) + 1);
+      });
+      duplicateEmails = new Set([...emailCounts.entries()]
+        .filter(([, count]) => count > 1)
+        .map(([email]) => email));
+      dataLoaded = true;
+    }
+
     function getStatus(person) {
-      if (!person.email) return { key: 'error', label: 'Puuttuu', reason: 'Sähköpostiosoite puuttuu henkilöstötietolähteestä.' };
+      if (!person.email) return { key: 'error', label: 'Puuttuu', reason: 'Sähköpostiosoite puuttuu CSV-riviltä.' };
       if (!emailPattern.test(person.email)) return { key: 'error', label: 'Virheellinen', reason: 'Sähköpostiosoite ei vastaa kelvollista osoitemuotoa.' };
-      if (duplicateEmails.has(person.email)) return { key: 'duplicate', label: 'Kaksoiskappale', reason: 'Sama sähköpostiosoite esiintyy useammalla henkilöstörivillä.' };
+      if (duplicateEmails.has(person.email)) return { key: 'duplicate', label: 'Kaksoiskappale', reason: 'Sama sähköpostiosoite esiintyy useammalla CSV-rivillä.' };
       return { key: 'ok', label: 'Kelvollinen', reason: 'Osoite on kelvollinen ja yksilöllinen.' };
     }
+
     function getFiltered() {
-      const org = $('org').value, role = $('role').value;
-      const title = $('title').value.trim().toLowerCase(), search = $('search').value.trim().toLowerCase();
+      const organisationId = $('org').value;
+      const role = $('role').value;
+      const title = $('title').value.trim().toLocaleLowerCase('fi-FI');
+      const search = $('search').value.trim().toLocaleLowerCase('fi-FI');
       return people.filter((person) => {
         const organisation = orgById.get(person.orgId);
-        const searchable = [person.name, person.id, person.role, person.title, organisation.name, organisation.unit].join(' ').toLowerCase();
+        const searchable = [
+          person.name, person.id, person.role, person.title, person.email,
+          person.company, person.department, person.serviceUnit, person.city,
+          person.businessArea, person.responsibilityArea, person.serviceArea,
+          person.accountStatus, organisation?.name
+        ].join(' ').toLocaleLowerCase('fi-FI');
         const status = getStatus(person);
-        return (!org || person.orgId === org) && (!role || person.role === role) &&
-          (!title || person.title.toLowerCase().includes(title)) && (!search || searchable.includes(search)) &&
+        return (!organisationId || person.orgId === organisationId) && (!role || person.role === role) &&
+          (!title || person.title.toLocaleLowerCase('fi-FI').includes(title)) &&
+          (!search || searchable.includes(search)) &&
           (!$('validOnly').checked || status.key === 'ok');
       });
     }
+
+    function getExportablePeople() {
+      return getFiltered().filter((person) => getStatus(person).key === 'ok');
+    }
+
+    function renderPerson(person) {
+      const organisation = orgById.get(person.orgId);
+      const status = getStatus(person);
+      const unit = [person.department, person.serviceUnit]
+        .filter((value, index, values) => value && values.indexOf(value) === index)
+        .join(' · ');
+      return '<tr><td><span class="person">' + escapeHtml(person.name) + '</span><span class="sub">' + escapeHtml(person.id) + '</span></td>' +
+        '<td>' + escapeHtml(person.company) + '<span class="sub">' + escapeHtml(unit || organisation?.name || '—') + '</span></td>' +
+        '<td>' + escapeHtml(person.role) + '<span class="sub">' + escapeHtml(person.title) + '</span></td>' +
+        '<td>' + (person.email ? escapeHtml(person.email) : '<span class="sub">— ei ilmoitettu —</span>') + '</td>' +
+        '<td><span class="status ' + status.key + '">' + status.label + '</span><span class="sub">' + escapeHtml(person.accountStatus || '—') + '</span></td>' +
+        '<td><details><summary>Miksi mukana?</summary><p>' + escapeHtml(person.department + ' · ' + person.role + ' · ' + person.title) + '</p><p>' + escapeHtml(status.reason) + '</p></details></td></tr>';
+    }
+
     function render() {
-      const filtered = getFiltered(), statuses = filtered.map(getStatus), valid = statuses.filter((s) => s.key === 'ok');
+      if (!dataLoaded) return;
+      const filtered = getFiltered();
+      const statuses = filtered.map(getStatus);
+      const exportable = statuses.filter((status) => status.key === 'ok');
       $('matchCount').textContent = filtered.length;
-      $('validCount').textContent = valid.length;
-      $('duplicateCount').textContent = statuses.filter((s) => s.key === 'duplicate').length;
-      $('errorCount').textContent = statuses.filter((s) => s.key === 'error').length;
+      $('validCount').textContent = exportable.length;
+      $('duplicateCount').textContent = statuses.filter((status) => status.key === 'duplicate').length;
+      $('errorCount').textContent = statuses.filter((status) => status.key === 'error').length;
+
       const tags = [];
-      if ($('org').value) tags.push('Organisaatio: ' + orgById.get($('org').value).name);
-      if ($('role').value) tags.push('Rooli: ' + $('role').value);
+      if ($('org').value) tags.push('Osasto: ' + orgById.get($('org').value).name);
+      if ($('role').value) tags.push('Henkilöstötyyppi: ' + $('role').value);
       if ($('title').value.trim()) tags.push('Tehtävänimike: ' + $('title').value.trim());
       if ($('search').value.trim()) tags.push('Haku: ' + $('search').value.trim());
       if ($('validOnly').checked) tags.push('Vain vientikelpoiset');
-      $('criteria').innerHTML = tags.length ? tags.map((tag) => '<span class="tag">' + escapeHtml(tag) + '</span>').join('') : '<span class="tag">Ei rajauksia · kaikki synteettiset rivit</span>';
-      $('notice').innerHTML = statuses.some((s) => s.key !== 'ok') ? '<div class="notice">Huomio: tuloksissa on rivejä, joita ei viedä sähköpostilistaan. Tarkista laatutilanne riveittäin.</div>' : '';
-      $('results').innerHTML = filtered.length ? filtered.map((person) => {
-        const org = orgById.get(person.orgId), status = getStatus(person);
-        return '<tr><td><span class="person">' + escapeHtml(person.name) + '</span><span class="sub">' + escapeHtml(person.id) + '</span></td>' +
-          '<td>' + escapeHtml(org.name) + '<span class="sub">' + escapeHtml(org.unit) + '</span></td>' +
-          '<td>' + escapeHtml(person.role) + '<span class="sub">' + escapeHtml(person.title) + '</span></td>' +
-          '<td>' + (person.email ? escapeHtml(person.email) : '<span class="sub">— ei ilmoitettu —</span>') + '</td>' +
-          '<td><span class="status ' + status.key + '">' + status.label + '</span></td>' +
-          '<td><details><summary>Miksi mukana?</summary><p>' + escapeHtml(org.name + ' · ' + person.role + ' · ' + person.title) + '</p><p>' + escapeHtml(status.reason) + '</p></details></td></tr>';
-      }).join('') : '<tr><td colspan="6" class="empty">Yksikään henkilö ei vastaa valittuja ehtoja.</td></tr>';
-      $('copy').disabled = valid.length === 0;
+      $('criteria').innerHTML = tags.length
+        ? tags.map((tag) => '<span class="tag">' + escapeHtml(tag) + '</span>').join('')
+        : '<span class="tag">Ei rajauksia · kaikki CSV-rivit</span>';
+
+      const notices = [];
+      if (statuses.some((status) => status.key !== 'ok')) {
+        notices.push('Huomio: tuloksissa on rivejä, joita ei viedä sähköpostilistaan. Tarkista laatutilanne riveittäin.');
+      }
+      if (filtered.length > MAX_RENDERED_ROWS) {
+        notices.push('Esikatselussa näytetään ' + MAX_RENDERED_ROWS + ' ensimmäistä riviä, mutta vienti käyttää kaikkia ' + filtered.length + ' suodatettua riviä.');
+      }
+      $('notice').innerHTML = notices.map((message) => '<div class="notice">' + escapeHtml(message) + '</div>').join('');
+      $('results').innerHTML = filtered.length
+        ? filtered.slice(0, MAX_RENDERED_ROWS).map(renderPerson).join('')
+        : '<tr><td colspan="6" class="empty">Yksikään CSV-rivi ei vastaa valittuja ehtoja.</td></tr>';
+      $('copy').disabled = exportable.length === 0;
+      $('outlook').disabled = exportable.length === 0;
       $('export').disabled = filtered.length === 0;
     }
+
     function notify(message) {
-      $('toast').textContent = message; $('toast').classList.add('show');
+      $('toast').textContent = message;
+      $('toast').classList.add('show');
       setTimeout(() => $('toast').classList.remove('show'), 2400);
     }
-    function exportCsv() {
-      const rows = [['Henkilö', 'Tunniste', 'Organisaatio', 'Yksikkö', 'Rooli', 'Tehtävä', 'Sähköposti', 'Tila']];
-      getFiltered().forEach((person) => { const org = orgById.get(person.orgId), status = getStatus(person); rows.push([person.name, person.id, org.name, org.unit, person.role, person.title, person.email, status.label]); });
-      const csv = rows.map((row) => row.map((value) => '"' + String(value).replace(/"/g, '""') + '"').join(';')).join('\\n');
-      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-      link.download = 'kohdennettu-henkilolista.csv'; link.click(); URL.revokeObjectURL(link.href); notify('CSV-tiedosto luotu.');
+
+    async function copyAddresses() {
+      const emails = getExportablePeople().map((person) => person.email);
+      if (!emails.length) return;
+      try {
+        await navigator.clipboard.writeText(emails.join('; '));
+        notify('Kelvolliset osoitteet kopioitu.');
+      } catch (error) {
+        notify('Osoitteiden kopiointi ei onnistunut.');
+      }
     }
-    $('org').innerHTML += organisations.map((org) => '<option value="' + org.id + '">' + escapeHtml(org.name) + '</option>').join('');
-    [...new Set(people.map((person) => person.role))].sort().forEach((role) => { $('role').insertAdjacentHTML('beforeend', '<option>' + escapeHtml(role) + '</option>'); });
-    $('peopleCount').textContent = people.length; $('orgCount').textContent = organisations.length;
-    ['org', 'role', 'title', 'search', 'validOnly'].forEach((id) => $(id).addEventListener('input', render));
-    $('copy').addEventListener('click', async () => { await navigator.clipboard.writeText(getFiltered().filter((p) => getStatus(p).key === 'ok').map((p) => p.email).join('; ')); notify('Kelvolliset osoitteet kopioitu.'); });
+
+    async function openOutlook() {
+      const emails = getExportablePeople().map((person) => person.email);
+      if (!emails.length) return;
+      const mailto = 'mailto:?bcc=' + encodeURIComponent(emails.join(','));
+      try {
+        if (window.desktopApi?.openMailto) {
+          await window.desktopApi.openMailto(mailto);
+        } else {
+          window.location.href = mailto;
+        }
+        notify(emails.length + ' osoitetta lisätty Outlookin vastaanottajiksi.');
+      } catch (error) {
+        notify('Outlook-linkin avaaminen ei onnistunut.');
+      }
+    }
+
+    function exportCsv() {
+      const rows = [['Henkilö', 'Tunniste', 'Organisaatio', 'Osasto', 'Palveluyksikkö', 'Henkilöstötyyppi', 'Tehtävä', 'Sähköposti', 'Tilin tila', 'Laatu']];
+      getFiltered().forEach((person) => {
+        const status = getStatus(person);
+        rows.push([person.name, person.id, person.company, person.department, person.serviceUnit, person.role, person.title, person.email, person.accountStatus, status.label]);
+      });
+      const csv = rows.map((row) => row.map((value) => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(';')).join('\n');
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'kohdennettu-henkilolista.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      notify('CSV-tiedosto luotu.');
+    }
+
+    function populateFilters() {
+      $('org').innerHTML = '<option value="">Kaikki osastot</option>' +
+        organisations.map((organisation) => '<option value="' + escapeHtml(organisation.id) + '">' + escapeHtml(organisation.name) + '</option>').join('');
+      const roles = [...new Set(people.map((person) => person.role))]
+        .sort((first, second) => first.localeCompare(second, 'fi'));
+      $('role').innerHTML = '<option value="">Kaikki henkilöstötyypit</option>' +
+        roles.map((role) => '<option value="' + escapeHtml(role) + '">' + escapeHtml(role) + '</option>').join('');
+      $('peopleCount').textContent = people.length;
+      $('orgCount').textContent = organisations.length;
+    }
+
+    function showDataError(error) {
+      const message = error instanceof Error ? error.message : 'Tuntematon latausvirhe.';
+      $('peopleCount').textContent = '—';
+      $('orgCount').textContent = '—';
+      $('notice').innerHTML = '<div class="notice">CSV-tiedoston lataus epäonnistui: ' + escapeHtml(message) + '</div>';
+      $('results').innerHTML = '<tr><td colspan="6" class="empty">Dataa ei voitu ladata.</td></tr>';
+      $('copy').disabled = true;
+      $('outlook').disabled = true;
+      $('export').disabled = true;
+    }
+
+    ['org', 'role'].forEach((id) => $(id).addEventListener('change', render));
+    ['title', 'search'].forEach((id) => $(id).addEventListener('input', render));
+    $('validOnly').addEventListener('change', render);
+    $('copy').addEventListener('click', copyAddresses);
+    $('outlook').addEventListener('click', openOutlook);
     $('export').addEventListener('click', exportCsv);
-    render();
+
+    (async function loadData() {
+      try {
+        const records = parseCsv(await readCsvFile());
+        if (!records.length) throw new Error('CSV-tiedosto ei sisältänyt henkilöstörivejä.');
+        initialiseData(records);
+        populateFilters();
+        render();
+      } catch (error) {
+        console.error(error);
+        showDataError(error);
+      }
+    }());
   </script>
 </body>
 </html>
