@@ -1,0 +1,39 @@
+The goal of the project is to make software for generating e-mail recipient lists based on data from a large healthcare provider with over 12000 employees.. We need to be able to make specific lists dynamically based on the search terms and selected filters and match the employees based on their data and attributes which may correspond to their position in the organisation structure.
+
+The lists are needed to efficiently send emails for different groups of people for many reasons. (for example: security notices, mails from supervisors / managers, policy changes, etc)
+
+At minimum, the search terms / fields in the app should include:
+- Organisation levels:
+-- Business area
+-- Area of responsibility
+-- Service Area 
+-- Service Unit
+-- Office
+- Location / City of primary working place
+- Job title
+- Supervisor role
+
+(Same in finnish:
+Valittavia hakuehtoja tulisi olla ainakin seuraavat:
+• Organisaatiotasot:
+o Toimiala
+o Vastuualue
+o Palvelualue
+o Palveluyksikkö
+o Toimipiste (alin organisaatiotaso)
+• Paikkakunta, jolla ensisijainen työskentelypiste sijaitsee
+• Työpaikan osoite
+• Ammattinimike
+• Esihenkilörooli
+)
+
+We need an application where you can select the search terms and/or otherwise filter the data. 
+
+The mailing lists has to be exported to at least:
+- Clipboard in Windows to be used freely
+- CSV format so it can be imported to mail apps such as Creamailer
+- (Possibly) For the app user, an email draft for Outlook where the email addresses get added to the selected field (from/cc/bcc) [this is not priority right now, can be ignored until later]
+
+There are two data sources, a tag server which has a text description for each of the tags, representing organisation structure. The other one is Entra which has organisation employee data, employee info such as name, address, email, etc. and also the fields specified above. The data sources will be connected through a specific field in the data. The user can filter recipients by org, person, role or position, for example.
+
+Ignore these sources while developing, and instead we are going to import and use local datasets in CSV or JSON files. 
