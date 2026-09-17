@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Listalabra - kohdennettu henkilöstölista</title>
+  <title>Version 1.3 - kohdennettu henkilöstölista</title>
   <style>
     :root {
       --ink: #172b4d;
@@ -38,6 +38,11 @@
     select:focus, input:focus { outline: 3px solid #d8ebfa; border-color: var(--blue); }
     .check { display: flex; gap: 9px; align-items: center; margin-top: 17px; font-weight: 500; color: var(--ink); }
     .check input { width: auto; accent-color: var(--blue); }
+    .selected-values { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+    .filter-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border-radius: 16px; background: var(--blue-soft); color: #145b91; font-size: 12px; }
+    .filter-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .filter-chip button { padding: 0; color: #145b91; background: transparent; font-size: 16px; line-height: 1; }
+    .filter-chip button:hover { color: var(--red); }
     .source-note { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 16px; color: var(--muted); font-size: 12px; }
     .source-note strong { color: var(--ink); }
     .content { min-width: 0; }
@@ -74,6 +79,9 @@
     details p { color: var(--muted); font-size: 12px; margin: 7px 0 0; max-width: 280px; }
     .empty { padding: 40px 20px; color: var(--muted); text-align: center; }
     .notice { margin: 16px 22px 0; padding: 11px 13px; border-radius: 7px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
+    .load-more { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 16px 22px; border-top: 1px solid var(--line); background: #f9fbfd; }
+    .load-more.hidden { display: none; }
+    .load-more span { color: var(--muted); font-size: 12px; }
     .toast { position: fixed; right: 25px; bottom: 25px; background: #18334f; color: white; padding: 11px 15px; border-radius: 8px; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; }
     .toast.show { opacity: 1; transform: translateY(0); }
     @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .filters { position: static; } .summary { grid-template-columns: repeat(2, 1fr); } }
@@ -89,15 +97,34 @@
     <div class="grid">
       <aside class="card filters">
         <h2>Rajaa vastaanottajat</h2>
-        <p class="hint">Valinnat tehdään suoraan CSV-tiedoston henkilöstöriveistä.</p>
-        <label for="org">Osasto / palvelualue</label>
-        <select id="org"><option value="">Kaikki osastot</option></select>
+        <p class="hint">Kirjoita kenttään tai valitse ehdotus listasta. Kaikki valinnat yhdistetään.</p>
+        <label for="org">Osasto</label>
+        <input id="org" list="departmentOptions" type="search" placeholder="Kirjoita tai valitse osasto" autocomplete="off">
+        <datalist id="departmentOptions"></datalist>
+        <div id="orgSelected" class="selected-values" aria-live="polite"></div>
+        <label for="serviceArea">Palvelualue</label>
+        <input id="serviceArea" list="serviceAreaOptions" type="search" placeholder="Kirjoita tai valitse palvelualue" autocomplete="off">
+        <datalist id="serviceAreaOptions"></datalist>
+        <div id="serviceAreaSelected" class="selected-values" aria-live="polite"></div>
         <label for="role">Henkilöstötyyppi / rooli</label>
-        <select id="role"><option value="">Kaikki henkilöstötyypit</option></select>
+        <input id="role" list="roleOptions" type="search" placeholder="Kirjoita tai valitse henkilöstötyyppi" autocomplete="off">
+        <datalist id="roleOptions"></datalist>
+        <div id="roleSelected" class="selected-values" aria-live="polite"></div>
+        <label for="city">Paikkakunta</label>
+        <input id="city" list="cityOptions" type="search" placeholder="esim. Jyväskylä" autocomplete="off">
+        <datalist id="cityOptions"></datalist>
+        <div id="citySelected" class="selected-values" aria-live="polite"></div>
+        <label for="address">Osoite</label>
+        <input id="address" list="addressOptions" type="search" placeholder="katu, toimipiste tai työpaikka" autocomplete="off">
+        <datalist id="addressOptions"></datalist>
+        <div id="addressSelected" class="selected-values" aria-live="polite"></div>
         <label for="title">Tehtävänimike sisältää</label>
-        <input id="title" type="search" placeholder="esim. koordinaattori">
+        <input id="title" list="titleOptions" type="search" placeholder="esim. koordinaattori" autocomplete="off">
+        <datalist id="titleOptions"></datalist>
+        <div id="titleSelected" class="selected-values" aria-live="polite"></div>
         <label for="search">Hae henkilön tietoja</label>
         <input id="search" type="search" placeholder="nimi, yksikkö tai tunniste">
+        <div id="searchSelected" class="selected-values" aria-live="polite"></div>
         <label class="check"><input id="validOnly" type="checkbox"> Näytä vain vientikelpoiset</label>
         <div class="source-note">
           <strong>Tietolähde</strong><br>
@@ -122,10 +149,11 @@
           <div id="notice"></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Henkilö</th><th>Organisaatio / yksikkö</th><th>Rooli ja tehtävä</th><th>Sähköposti</th><th>Laatu</th><th>Perustelu</th></tr></thead>
+              <thead><tr><th>Henkilö</th><th>Organisaatio / sijainti</th><th>Rooli ja tehtävä</th><th>Sähköposti</th><th>Laatu</th><th>Perustelu</th></tr></thead>
               <tbody id="results"></tbody>
             </table>
           </div>
+          <div id="loadMore" class="load-more hidden"><button id="loadMoreButton" class="secondary">Lataa lisää</button><span id="loadMoreStatus"></span></div>
         </div>
       </section>
     </div>
@@ -133,14 +161,35 @@
   <div id="toast" class="toast" role="status"></div>
   <script>
     const DATA_FILE = 'example_data.csv';
-    const MAX_RENDERED_ROWS = 250;
+    const PREVIEW_PAGE_SIZE = 300;
+    const FILTER_KEYS = ['org', 'serviceArea', 'role', 'city', 'address', 'title', 'search'];
+    const FILTER_LABELS = {
+      org: 'Osasto',
+      serviceArea: 'Palvelualue',
+      role: 'Henkilöstötyyppi',
+      city: 'Paikkakunta',
+      address: 'Osoite',
+      title: 'Tehtävänimike',
+      search: 'Haku'
+    };
     const $ = (id) => document.getElementById(id);
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const filterState = {
+      org: [],
+      serviceArea: [],
+      role: [],
+      city: [],
+      address: [],
+      title: [],
+      search: []
+    };
     let organisations = [];
     let people = [];
     let orgById = new Map();
     let duplicateEmails = new Set();
     let dataLoaded = false;
+    let visibleRowCount = PREVIEW_PAGE_SIZE;
+    let renderTimer = null;
 
     function clean(value) {
       return String(value ?? '').trim();
@@ -148,6 +197,65 @@
 
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+    }
+
+    function normalise(value) {
+      return clean(value).toLocaleLowerCase('fi-FI');
+    }
+
+    function getFilterValues(key) {
+      const selected = filterState[key];
+      const draft = clean($(key).value);
+      if (!draft || selected.some((value) => normalise(value) === normalise(draft))) return selected;
+      return [...selected, draft];
+    }
+
+    function renderSelectedValues(key) {
+      const container = $(key + 'Selected');
+      container.innerHTML = filterState[key].map((value, index) =>
+        '<span class="filter-chip"><span>' + escapeHtml(value) + '</span>' +
+        '<button type="button" data-filter-key="' + key + '" data-filter-index="' + index + '" aria-label="Poista ' + escapeHtml(value) + '">×</button></span>'
+      ).join('');
+    }
+
+    function addFilterValue(key, rawValue) {
+      const value = clean(rawValue);
+      if (!value) return;
+      if (!filterState[key].some((selected) => normalise(selected) === normalise(value))) {
+        filterState[key].push(value);
+      }
+      $(key).value = '';
+      renderSelectedValues(key);
+      scheduleRender(true);
+    }
+
+    function removeFilterValue(key, index) {
+      filterState[key].splice(index, 1);
+      renderSelectedValues(key);
+      scheduleRender(true);
+    }
+
+    function commitFilterInput(key) {
+      const value = clean($(key).value);
+      if (value) addFilterValue(key, value);
+    }
+
+    function removeLastFilterValue(key) {
+      if ($(key).value || !filterState[key].length) return;
+      filterState[key].pop();
+      renderSelectedValues(key);
+      scheduleRender(true);
+    }
+
+    function getActiveFilters() {
+      return Object.fromEntries(FILTER_KEYS.map((key) => [key, getFilterValues(key).map(normalise).filter(Boolean)]));
+    }
+
+    function matchesActiveFilter(activeFilters, key, value) {
+      const terms = activeFilters[key];
+      if (!terms.length) return true;
+      const normalisedValue = normalise(value);
+      return terms.some((term) => normalisedValue.includes(term));
     }
 
     function parseCsv(text) {
@@ -216,6 +324,9 @@
         email: clean(record.EmailAddress).toLowerCase(),
         accountStatus: clean(record.AccountStatus),
         city: clean(record.City),
+        workLocation: clean(record.WorkLocation),
+        streetAddress: clean(record.StreetAddress),
+        office: clean(record.Office),
         businessArea: clean(record.BusinessArea),
         responsibilityArea: clean(record.ResponsibilityArea),
         serviceArea: clean(record.ServiceArea),
@@ -250,22 +361,24 @@
     }
 
     function getFiltered() {
-      const organisationId = $('org').value;
-      const role = $('role').value;
-      const title = $('title').value.trim().toLocaleLowerCase('fi-FI');
-      const search = $('search').value.trim().toLocaleLowerCase('fi-FI');
+      const activeFilters = getActiveFilters();
       return people.filter((person) => {
         const organisation = orgById.get(person.orgId);
         const searchable = [
           person.name, person.id, person.role, person.title, person.email,
-          person.company, person.department, person.serviceUnit, person.city,
+          person.company, person.department, person.serviceArea, person.serviceUnit,
+          person.city, person.workLocation, person.streetAddress, person.office,
           person.businessArea, person.responsibilityArea, person.serviceArea,
           person.accountStatus, organisation?.name
         ].join(' ').toLocaleLowerCase('fi-FI');
         const status = getStatus(person);
-        return (!organisationId || person.orgId === organisationId) && (!role || person.role === role) &&
-          (!title || person.title.toLocaleLowerCase('fi-FI').includes(title)) &&
-          (!search || searchable.includes(search)) &&
+        return matchesActiveFilter(activeFilters, 'org', person.department) &&
+          matchesActiveFilter(activeFilters, 'serviceArea', person.serviceArea) &&
+          matchesActiveFilter(activeFilters, 'role', person.role) &&
+          matchesActiveFilter(activeFilters, 'city', person.city) &&
+          matchesActiveFilter(activeFilters, 'address', [person.workLocation, person.streetAddress].join(' ')) &&
+          matchesActiveFilter(activeFilters, 'title', person.title) &&
+          matchesActiveFilter(activeFilters, 'search', searchable) &&
           (!$('validOnly').checked || status.key === 'ok');
       });
     }
@@ -280,8 +393,11 @@
       const unit = [person.department, person.serviceUnit]
         .filter((value, index, values) => value && values.indexOf(value) === index)
         .join(' · ');
+      const location = [person.city, person.workLocation || person.streetAddress]
+        .filter((value, index, values) => value && values.indexOf(value) === index)
+        .join(' · ');
       return '<tr><td><span class="person">' + escapeHtml(person.name) + '</span><span class="sub">' + escapeHtml(person.id) + '</span></td>' +
-        '<td>' + escapeHtml(person.company) + '<span class="sub">' + escapeHtml(unit || organisation?.name || '—') + '</span></td>' +
+        '<td>' + escapeHtml(person.company) + '<span class="sub">' + escapeHtml(unit || organisation?.name || '—') + '</span><span class="sub">' + escapeHtml(location || 'Sijainti puuttuu') + '</span></td>' +
         '<td>' + escapeHtml(person.role) + '<span class="sub">' + escapeHtml(person.title) + '</span></td>' +
         '<td>' + (person.email ? escapeHtml(person.email) : '<span class="sub">— ei ilmoitettu —</span>') + '</td>' +
         '<td><span class="status ' + status.key + '">' + status.label + '</span><span class="sub">' + escapeHtml(person.accountStatus || '—') + '</span></td>' +
@@ -298,11 +414,8 @@
       $('duplicateCount').textContent = statuses.filter((status) => status.key === 'duplicate').length;
       $('errorCount').textContent = statuses.filter((status) => status.key === 'error').length;
 
-      const tags = [];
-      if ($('org').value) tags.push('Osasto: ' + orgById.get($('org').value).name);
-      if ($('role').value) tags.push('Henkilöstötyyppi: ' + $('role').value);
-      if ($('title').value.trim()) tags.push('Tehtävänimike: ' + $('title').value.trim());
-      if ($('search').value.trim()) tags.push('Haku: ' + $('search').value.trim());
+      const tags = FILTER_KEYS.flatMap((key) => getFilterValues(key)
+        .map((value) => FILTER_LABELS[key] + ': ' + value));
       if ($('validOnly').checked) tags.push('Vain vientikelpoiset');
       $('criteria').innerHTML = tags.length
         ? tags.map((tag) => '<span class="tag">' + escapeHtml(tag) + '</span>').join('')
@@ -312,13 +425,16 @@
       if (statuses.some((status) => status.key !== 'ok')) {
         notices.push('Huomio: tuloksissa on rivejä, joita ei viedä sähköpostilistaan. Tarkista laatutilanne riveittäin.');
       }
-      if (filtered.length > MAX_RENDERED_ROWS) {
-        notices.push('Esikatselussa näytetään ' + MAX_RENDERED_ROWS + ' ensimmäistä riviä, mutta vienti käyttää kaikkia ' + filtered.length + ' suodatettua riviä.');
+      const visiblePeople = filtered.slice(0, visibleRowCount);
+      if (filtered.length > visiblePeople.length) {
+        notices.push('Esikatselussa näytetään ' + visiblePeople.length + ' / ' + filtered.length + ' suodatettua riviä. Vienti ja osoitteiden kopiointi tarkistavat silti kaikki osumat.');
       }
       $('notice').innerHTML = notices.map((message) => '<div class="notice">' + escapeHtml(message) + '</div>').join('');
       $('results').innerHTML = filtered.length
-        ? filtered.slice(0, MAX_RENDERED_ROWS).map(renderPerson).join('')
+        ? visiblePeople.map(renderPerson).join('')
         : '<tr><td colspan="6" class="empty">Yksikään CSV-rivi ei vastaa valittuja ehtoja.</td></tr>';
+      $('loadMore').classList.toggle('hidden', filtered.length <= visiblePeople.length);
+      $('loadMoreStatus').textContent = filtered.length ? 'Näytetään ' + visiblePeople.length + ' / ' + filtered.length : '';
       $('copy').disabled = exportable.length === 0;
       $('outlook').disabled = exportable.length === 0;
       $('export').disabled = filtered.length === 0;
@@ -358,10 +474,10 @@
     }
 
     function exportCsv() {
-      const rows = [['Henkilö', 'Tunniste', 'Organisaatio', 'Osasto', 'Palveluyksikkö', 'Henkilöstötyyppi', 'Tehtävä', 'Sähköposti', 'Tilin tila', 'Laatu']];
+      const rows = [['Henkilö', 'Tunniste', 'Organisaatio', 'Osasto', 'Palvelualue', 'Palveluyksikkö', 'Paikkakunta', 'Työpaikka', 'Katuosoite', 'Henkilöstötyyppi', 'Tehtävä', 'Sähköposti', 'Tilin tila', 'Laatu']];
       getFiltered().forEach((person) => {
         const status = getStatus(person);
-        rows.push([person.name, person.id, person.company, person.department, person.serviceUnit, person.role, person.title, person.email, person.accountStatus, status.label]);
+        rows.push([person.name, person.id, person.company, person.department, person.serviceArea, person.serviceUnit, person.city, person.workLocation, person.streetAddress, person.role, person.title, person.email, person.accountStatus, status.label]);
       });
       const csv = rows.map((row) => row.map((value) => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(';')).join('\n');
       const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -373,13 +489,21 @@
       notify('CSV-tiedosto luotu.');
     }
 
-    function populateFilters() {
-      $('org').innerHTML = '<option value="">Kaikki osastot</option>' +
-        organisations.map((organisation) => '<option value="' + escapeHtml(organisation.id) + '">' + escapeHtml(organisation.name) + '</option>').join('');
-      const roles = [...new Set(people.map((person) => person.role))]
+    function populateDatalist(id, values) {
+      const uniqueValues = [...new Set(values.map(clean).filter(Boolean))]
         .sort((first, second) => first.localeCompare(second, 'fi'));
-      $('role').innerHTML = '<option value="">Kaikki henkilöstötyypit</option>' +
-        roles.map((role) => '<option value="' + escapeHtml(role) + '">' + escapeHtml(role) + '</option>').join('');
+      $(id).innerHTML = uniqueValues
+        .map((value) => '<option value="' + escapeHtml(value) + '"></option>')
+        .join('');
+    }
+
+    function populateFilters() {
+      populateDatalist('departmentOptions', people.map((person) => person.department));
+      populateDatalist('serviceAreaOptions', people.map((person) => person.serviceArea));
+      populateDatalist('roleOptions', people.map((person) => person.role));
+      populateDatalist('cityOptions', people.map((person) => person.city));
+      populateDatalist('addressOptions', people.flatMap((person) => [person.workLocation, person.streetAddress]));
+      populateDatalist('titleOptions', people.map((person) => person.title));
       $('peopleCount').textContent = people.length;
       $('orgCount').textContent = organisations.length;
     }
@@ -395,9 +519,41 @@
       $('export').disabled = true;
     }
 
-    ['org', 'role'].forEach((id) => $(id).addEventListener('change', render));
-    ['title', 'search'].forEach((id) => $(id).addEventListener('input', render));
-    $('validOnly').addEventListener('change', render);
+    function scheduleRender(resetPreview) {
+      if (resetPreview) visibleRowCount = PREVIEW_PAGE_SIZE;
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(() => {
+        renderTimer = null;
+        render();
+      }, 120);
+    }
+
+    FILTER_KEYS.forEach((key) => {
+      const input = $(key);
+      input.addEventListener('input', () => scheduleRender(true));
+      input.addEventListener('change', () => commitFilterInput(key));
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          commitFilterInput(key);
+        } else if (event.key === 'Backspace' && !input.value) {
+          removeLastFilterValue(key);
+        }
+      });
+      $(key + 'Selected').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-filter-index]');
+        if (button) removeFilterValue(key, Number(button.dataset.filterIndex));
+      });
+      renderSelectedValues(key);
+    });
+
+    $('validOnly').addEventListener('change', () => scheduleRender(true));
+    $('loadMoreButton').addEventListener('click', () => {
+      if (!dataLoaded) return;
+      clearTimeout(renderTimer);
+      visibleRowCount = Math.min(visibleRowCount + PREVIEW_PAGE_SIZE, getFiltered().length);
+      render();
+    });
     $('copy').addEventListener('click', copyAddresses);
     $('outlook').addEventListener('click', openOutlook);
     $('export').addEventListener('click', exportCsv);
