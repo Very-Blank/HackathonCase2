@@ -2,30 +2,17 @@ const { app, BrowserWindow } = require('electron');
 
 function createWindow() {
   const window = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1440,
+    height: 960,
+    minWidth: 1100,
+    minHeight: 760,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  window.loadURL(
-    'data:text/html;charset=UTF-8,' +
-      encodeURIComponent(`
-        <!doctype html>
-        <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>HackathonCase2</title>
-          </head>
-          <body>
-            <h1>Electron app is running</h1>
-          </body>
-        </html>
-      `),
-  );
+  window.loadFile('app.html');
 }
 
 app.whenReady().then(() => {

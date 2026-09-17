@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Listalabra - kohdennettu henkilöstölista</title>
+  <style>
+    :root {
+      --ink: #172b4d;
+      --muted: #60708a;
+      --line: #d9e2ec;
+      --panel: #ffffff;
+      --bg: #f4f7fb;
+      --blue: #1769aa;
+      --blue-soft: #e8f2fb;
+      --green: #18794e;
+      --green-soft: #e8f6ef;
+      --amber: #9a6500;
+      --amber-soft: #fff6dc;
+      --red: #b42318;
+      --red-soft: #fff0ee;
+      --shadow: 0 10px 30px rgba(29, 55, 86, .08);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--bg); font: 14px/1.5 Inter, "Segoe UI", sans-serif; }
+    header { color: white; background: linear-gradient(120deg, #123c62, #1769aa); padding: 28px 42px 32px; }
+    header .eyebrow { letter-spacing: .12em; text-transform: uppercase; font-size: 11px; opacity: .8; }
+    h1 { margin: 5px 0 4px; font-size: 30px; letter-spacing: -.02em; }
+    header p { margin: 0; opacity: .86; max-width: 720px; }
+    main { max-width: 1440px; margin: -14px auto 0; padding: 0 28px 36px; }
+    .grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+    .filters { padding: 22px; position: sticky; top: 18px; }
+    .card h2 { font-size: 17px; margin: 0 0 5px; }
+    .hint { color: var(--muted); font-size: 12px; margin: 0 0 20px; }
+    label { display: block; margin: 16px 0 6px; font-weight: 650; font-size: 12px; color: #3b4b63; }
+    select, input { width: 100%; border: 1px solid #bdcad8; border-radius: 7px; background: white; padding: 10px 11px; color: var(--ink); font: inherit; }
+    select:focus, input:focus { outline: 3px solid #d8ebfa; border-color: var(--blue); }
+    .check { display: flex; gap: 9px; align-items: center; margin-top: 17px; font-weight: 500; color: var(--ink); }
+    .check input { width: auto; accent-color: var(--blue); }
+    .source-note { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 16px; color: var(--muted); font-size: 12px; }
+    .source-note strong { color: var(--ink); }
+    .content { min-width: 0; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .metric { padding: 16px; background: white; border: 1px solid var(--line); border-radius: 10px; }
+    .metric strong { display: block; font-size: 25px; line-height: 1.1; }
+    .metric span { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .metric.good strong { color: var(--green); }
+    .metric.warn strong { color: var(--amber); }
+    .metric.bad strong { color: var(--red); }
+    .preview { overflow: hidden; }
+    .preview-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 19px 22px; border-bottom: 1px solid var(--line); }
+    .preview-head h2 { margin: 0; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { border: 0; border-radius: 7px; padding: 9px 13px; font: inherit; font-weight: 650; cursor: pointer; }
+    button.primary { background: var(--blue); color: white; }
+    button.secondary { background: var(--blue-soft); color: var(--blue); }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    .criteria { display: flex; flex-wrap: wrap; gap: 7px; padding: 14px 22px; background: #f9fbfd; border-bottom: 1px solid var(--line); }
+    .tag { background: var(--blue-soft); color: #145b91; border-radius: 20px; padding: 4px 9px; font-size: 12px; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #f9fbfd; color: var(--muted); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; text-align: left; }
+    th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    td { font-size: 13px; }
+    tr:last-child td { border-bottom: 0; }
+    .person { font-weight: 650; }
+    .sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .status { display: inline-flex; border-radius: 15px; padding: 3px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .status.ok { background: var(--green-soft); color: var(--green); }
+    .status.error { background: var(--red-soft); color: var(--red); }
+    .status.duplicate { background: var(--amber-soft); color: var(--amber); }
+    details summary { cursor: pointer; color: var(--blue); font-size: 12px; }
+    details p { color: var(--muted); font-size: 12px; margin: 7px 0 0; max-width: 280px; }
+    .empty { padding: 40px 20px; color: var(--muted); text-align: center; }
+    .notice { margin: 16px 22px 0; padding: 11px 13px; border-radius: 7px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
+    .toast { position: fixed; right: 25px; bottom: 25px; background: #18334f; color: white; padding: 11px 15px; border-radius: 8px; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .filters { position: static; } .summary { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Prototyyppi · Case 2</div>
+    <h1>Listalabra</h1>
+    <p>Muodosta kohdennettu henkilöstön sähköpostilista organisaatio- ja henkilöstötietojen perusteella.</p>
+  </header>
+  <main>
+    <div class="grid">
+      <aside class="card filters">
+        <h2>Rajaa vastaanottajat</h2>
+        <p class="hint">Valinnat yhdistetään kahdesta synteettisestä tietolähteestä.</p>
+        <label for="org">Organisaatio</label>
+        <select id="org"><option value="">Kaikki organisaatiot</option></select>
+        <label for="role">Ammattiryhmä / rooli</label>
+        <select id="role"><option value="">Kaikki roolit</option></select>
+        <label for="title">Tehtävänimike sisältää</label>
+        <input id="title" type="search" placeholder="esim. koordinaattori">
+        <label for="search">Hae henkilön tietoja</label>
+        <input id="search" type="search" placeholder="nimi, yksikkö tai tunniste">
+        <label class="check"><input id="validOnly" type="checkbox"> Näytä vain vientikelpoiset</label>
+        <div class="source-note">
+          <strong>Tietolähteet</strong><br>
+          Henkilöstötiedot: <span id="peopleCount"></span> synteettistä riviä<br>
+          Organisaatiorakenne: <span id="orgCount"></span> yksikköä<br>
+          Yhdistäminen: <strong>orgId</strong>
+        </div>
+      </aside>
+      <section class="content">
+        <div class="summary">
+          <div class="metric"><strong id="matchCount">0</strong><span>Rajauksen tulokset</span></div>
+          <div class="metric good"><strong id="validCount">0</strong><span>Vientikelpoista osoitetta</span></div>
+          <div class="metric warn"><strong id="duplicateCount">0</strong><span>Kaksoiskappaletta</span></div>
+          <div class="metric bad"><strong id="errorCount">0</strong><span>Puuttuvaa / virheellistä</span></div>
+        </div>
+        <div class="card preview">
+          <div class="preview-head">
+            <div><h2>Listan esikatselu</h2><span class="hint">Tarkista laatu ennen kopiointia tai vientiä.</span></div>
+            <div class="actions"><button id="copy" class="secondary">Kopioi osoitteet</button><button id="export" class="primary">Vie CSV</button></div>
+          </div>
+          <div id="criteria" class="criteria"></div>
+          <div id="notice"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Henkilö</th><th>Organisaatio / yksikkö</th><th>Rooli ja tehtävä</th><th>Sähköposti</th><th>Laatu</th><th>Perustelu</th></tr></thead>
+              <tbody id="results"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script>
+    // Both sources are deliberately synthetic; no real personnel data is used.
+    const organisations = [
+      { id: 'org-01', name: 'Hyvinvointialueen johto', unit: 'Hallinto ja kehittäminen' },
+      { id: 'org-02', name: 'Sosiaali- ja perhepalvelut', unit: 'Perhepalvelut' },
+      { id: 'org-03', name: 'Terveyspalvelut', unit: 'Avoterveydenhuolto' },
+      { id: 'org-04', name: 'Pelastuspalvelut', unit: 'Pelastuslaitos' }
+    ];
+    const people = [
+      { id: 'P-1001', name: 'Aino Malli', orgId: 'org-01', role: 'Hallinto', title: 'kehittämispäällikkö', email: 'aino.malli@example.test' },
+      { id: 'P-1002', name: 'Eero Esimerkki', orgId: 'org-01', role: 'Viestintä', title: 'viestintäkoordinaattori', email: 'eero.esimerkki@example.test' },
+      { id: 'P-1003', name: 'Sini Demo', orgId: 'org-02', role: 'Sosiaalipalvelut', title: 'sosiaalityöntekijä', email: 'sini.demo@example.test' },
+      { id: 'P-1004', name: 'Olli Testi', orgId: 'org-02', role: 'Sosiaalipalvelut', title: 'palveluohjaaja', email: 'olli.testi@example.test' },
+      { id: 'P-1005', name: 'Meri Malli', orgId: 'org-03', role: 'Terveydenhuolto', title: 'sairaanhoitaja', email: 'meri.malli@example.test' },
+      { id: 'P-1006', name: 'Lumi Esimerkki', orgId: 'org-03', role: 'Terveydenhuolto', title: 'terveydenhoitaja', email: 'meri.malli@example.test' },
+      { id: 'P-1007', name: 'Vesa Demo', orgId: 'org-03', role: 'Johtaminen', title: 'osastonhoitaja', email: '' },
+      { id: 'P-1008', name: 'Kajo Testi', orgId: 'org-04', role: 'Pelastus', title: 'palomestari', email: 'kajo.demo@' },
+      { id: 'P-1009', name: 'Iiris Malli', orgId: 'org-04', role: 'Pelastus', title: 'palomies', email: 'iiris.malli@example.test' }
+    ];
+    const $ = (id) => document.getElementById(id);
+    const emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+    const orgById = new Map(organisations.map((org) => [org.id, org]));
+    const duplicateEmails = new Set(people.map((p) => p.email).filter((email, i, all) => email && all.indexOf(email) !== i));
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+    }
+    function getStatus(person) {
+      if (!person.email) return { key: 'error', label: 'Puuttuu', reason: 'Sähköpostiosoite puuttuu henkilöstötietolähteestä.' };
+      if (!emailPattern.test(person.email)) return { key: 'error', label: 'Virheellinen', reason: 'Sähköpostiosoite ei vastaa kelvollista osoitemuotoa.' };
+      if (duplicateEmails.has(person.email)) return { key: 'duplicate', label: 'Kaksoiskappale', reason: 'Sama sähköpostiosoite esiintyy useammalla henkilöstörivillä.' };
+      return { key: 'ok', label: 'Kelvollinen', reason: 'Osoite on kelvollinen ja yksilöllinen.' };
+    }
+    function getFiltered() {
+      const org = $('org').value, role = $('role').value;
+      const title = $('title').value.trim().toLowerCase(), search = $('search').value.trim().toLowerCase();
+      return people.filter((person) => {
+        const organisation = orgById.get(person.orgId);
+        const searchable = [person.name, person.id, person.role, person.title, organisation.name, organisation.unit].join(' ').toLowerCase();
+        const status = getStatus(person);
+        return (!org || person.orgId === org) && (!role || person.role === role) &&
+          (!title || person.title.toLowerCase().includes(title)) && (!search || searchable.includes(search)) &&
+          (!$('validOnly').checked || status.key === 'ok');
+      });
+    }
+    function render() {
+      const filtered = getFiltered(), statuses = filtered.map(getStatus), valid = statuses.filter((s) => s.key === 'ok');
+      $('matchCount').textContent = filtered.length;
+      $('validCount').textContent = valid.length;
+      $('duplicateCount').textContent = statuses.filter((s) => s.key === 'duplicate').length;
+      $('errorCount').textContent = statuses.filter((s) => s.key === 'error').length;
+      const tags = [];
+      if ($('org').value) tags.push('Organisaatio: ' + orgById.get($('org').value).name);
+      if ($('role').value) tags.push('Rooli: ' + $('role').value);
+      if ($('title').value.trim()) tags.push('Tehtävänimike: ' + $('title').value.trim());
+      if ($('search').value.trim()) tags.push('Haku: ' + $('search').value.trim());
+      if ($('validOnly').checked) tags.push('Vain vientikelpoiset');
+      $('criteria').innerHTML = tags.length ? tags.map((tag) => '<span class="tag">' + escapeHtml(tag) + '</span>').join('') : '<span class="tag">Ei rajauksia · kaikki synteettiset rivit</span>';
+      $('notice').innerHTML = statuses.some((s) => s.key !== 'ok') ? '<div class="notice">Huomio: tuloksissa on rivejä, joita ei viedä sähköpostilistaan. Tarkista laatutilanne riveittäin.</div>' : '';
+      $('results').innerHTML = filtered.length ? filtered.map((person) => {
+        const org = orgById.get(person.orgId), status = getStatus(person);
+        return '<tr><td><span class="person">' + escapeHtml(person.name) + '</span><span class="sub">' + escapeHtml(person.id) + '</span></td>' +
+          '<td>' + escapeHtml(org.name) + '<span class="sub">' + escapeHtml(org.unit) + '</span></td>' +
+          '<td>' + escapeHtml(person.role) + '<span class="sub">' + escapeHtml(person.title) + '</span></td>' +
+          '<td>' + (person.email ? escapeHtml(person.email) : '<span class="sub">— ei ilmoitettu —</span>') + '</td>' +
+          '<td><span class="status ' + status.key + '">' + status.label + '</span></td>' +
+          '<td><details><summary>Miksi mukana?</summary><p>' + escapeHtml(org.name + ' · ' + person.role + ' · ' + person.title) + '</p><p>' + escapeHtml(status.reason) + '</p></details></td></tr>';
+      }).join('') : '<tr><td colspan="6" class="empty">Yksikään henkilö ei vastaa valittuja ehtoja.</td></tr>';
+      $('copy').disabled = valid.length === 0;
+      $('export').disabled = filtered.length === 0;
+    }
+    function notify(message) {
+      $('toast').textContent = message; $('toast').classList.add('show');
+      setTimeout(() => $('toast').classList.remove('show'), 2400);
+    }
+    function exportCsv() {
+      const rows = [['Henkilö', 'Tunniste', 'Organisaatio', 'Yksikkö', 'Rooli', 'Tehtävä', 'Sähköposti', 'Tila']];
+      getFiltered().forEach((person) => { const org = orgById.get(person.orgId), status = getStatus(person); rows.push([person.name, person.id, org.name, org.unit, person.role, person.title, person.email, status.label]); });
+      const csv = rows.map((row) => row.map((value) => '"' + String(value).replace(/"/g, '""') + '"').join(';')).join('\\n');
+      const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      link.download = 'kohdennettu-henkilolista.csv'; link.click(); URL.revokeObjectURL(link.href); notify('CSV-tiedosto luotu.');
+    }
+    $('org').innerHTML += organisations.map((org) => '<option value="' + org.id + '">' + escapeHtml(org.name) + '</option>').join('');
+    [...new Set(people.map((person) => person.role))].sort().forEach((role) => { $('role').insertAdjacentHTML('beforeend', '<option>' + escapeHtml(role) + '</option>'); });
+    $('peopleCount').textContent = people.length; $('orgCount').textContent = organisations.length;
+    ['org', 'role', 'title', 'search', 'validOnly'].forEach((id) => $(id).addEventListener('input', render));
+    $('copy').addEventListener('click', async () => { await navigator.clipboard.writeText(getFiltered().filter((p) => getStatus(p).key === 'ok').map((p) => p.email).join('; ')); notify('Kelvolliset osoitteet kopioitu.'); });
+    $('export').addEventListener('click', exportCsv);
+    render();
+  </script>
+</body>
+</html>
